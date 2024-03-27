@@ -1,48 +1,88 @@
-﻿using Client.BLL.Interfaces;
+﻿using AutoMapper;
+using Client.BLL.Interfaces;
 using Client.DAL.Models;
+using Client.PL.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Client.PL.Controllers
 {
     public class EmployeeController : Controller
     {
+        private readonly IMapper _mapper;
+
         // Inhertince : EmployeeController is Controller
         // Association : EmployeeController has EmployeeRepository
 
         private readonly IEmployeeRepository _EmployeeRepository;
+       //private readonly IDepartmentRepository _departmentRepository;
         private readonly IHostEnvironment _env;
 
-        public EmployeeController(IEmployeeRepository employee, IHostEnvironment Env)
+        public EmployeeController(IMapper mapper,IEmployeeRepository employee,/*IDepartmentRepository departmentRepository,*/ IHostEnvironment Env)
         {
+            _mapper = mapper;
             _EmployeeRepository = employee;
+            //_departmentRepository = departmentRepository;
             _env = Env;
         }
         // /Employee/Index
-        public IActionResult Index()
+        public IActionResult Index( string SearchInp)
         {
-            var Employee = _EmployeeRepository.GetAll();
+            var employees = Enumerable.Empty<Employee>();
+            if (string.IsNullOrEmpty(SearchInp)) {
 
-            return View(Employee);
+
+                employees = _EmployeeRepository.GetAll();
+
+            return View(employees);
+
+            }
+            else
+            {
+                employees = _EmployeeRepository.SearchByName(SearchInp.ToLower());
+                var MappedEmp = _mapper.Map<IEnumerable<Employee>, IEnumerable<EmployeeViewModel>>(employees);
+                return View(MappedEmp);
+            }
         }
         [HttpGet]
         public IActionResult Create()
         {
+         //   ViewData["Departments"]= _departmentRepository.GetAll();
             return View();
         }
         [HttpPost]
-        public IActionResult Create(Employee employee)
+        public IActionResult Create(EmployeeViewModel employeeVM)
         {
             if (ModelState.IsValid)
             {
-                var Coun = _EmployeeRepository.Add(employee);
+                //Manual Mapping
+                ///var Mappedemployee = new Employee()
+                ///{
+                ///    Name = employeeVM.Name,
+                ///    Age = employeeVM.Age,
+                ///    Adress = employeeVM.Adress,
+                ///    Salary = employeeVM.Salary,
+                ///    Email = employeeVM.Email,
+                ///    PhoneNumber = employeeVM.PhoneNumber,
+                ///    IsActive = employeeVM.IsActive,
+                ///    HiringDate = employeeVM.HiringDate,
+                ///};
+                ///
+                var mappedEmp = _mapper.Map<EmployeeViewModel, Employee>(employeeVM);
+                var Coun = _EmployeeRepository.Add(mappedEmp);
                 if (Coun > 0)
                 {
+                    TempData["Message"] = "Employee Is successfuly Add";
                     return RedirectToAction(nameof(Index));
                 }
+              
             }
             
-            return View(employee);
+            TempData["Message"] = "An Error Has Occred";
+            return View(employeeVM);
         }
 
         public IActionResult Details(int? id, string ViewName = "Details")
@@ -50,9 +90,10 @@ namespace Client.PL.Controllers
             if (id is null)
                 return BadRequest();
             var Employee = _EmployeeRepository.Get(id.Value);
-            if (Employee is null)
+            var MappedEmp =_mapper.Map<Employee, EmployeeViewModel>(Employee);
+            if (MappedEmp is null)
                 return NotFound();
-            return View(ViewName, Employee);
+            return View(ViewName, MappedEmp);
         }
         [HttpGet]
         public IActionResult Edit(int? id)
@@ -63,23 +104,26 @@ namespace Client.PL.Controllers
             //if (Employee is null)
             //    return NotFound();
             //return View(Employee);
+
+           // ViewData["Departments"] = _departmentRepository.GetAll();
             return Details(id, "Edit");
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Edit([FromRoute] int id, Employee employee)
+        public IActionResult Edit([FromRoute] int id, EmployeeViewModel employeeVM)
         {
-            if (id != employee.Id)
+            if (id != employeeVM.Id)
             {
                 return BadRequest("An Error Ya Hamada");
             }
             if (!ModelState.IsValid)
             {
-                return View(employee);
+                return View(employeeVM);
             }
             try
             {
-                _EmployeeRepository.Update(employee);
+                var mappedEmp = _mapper.Map<EmployeeViewModel,Employee>(employeeVM);
+                _EmployeeRepository.Update(mappedEmp);
                 return RedirectToAction(nameof(Index));
             }
             catch (System.Exception ex)
@@ -91,7 +135,7 @@ namespace Client.PL.Controllers
                     ModelState.AddModelError(string.Empty, ex.Message);
                 else
                     ModelState.AddModelError(string.Empty, "An Error Has Occured Updating The Employee ");
-                return View(employee);
+                return View(employeeVM);
             }
         }
 
@@ -102,11 +146,13 @@ namespace Client.PL.Controllers
         }
 
         [HttpPost]
-        public IActionResult Delete(Employee employee)
+        public IActionResult Delete(EmployeeViewModel employeeVm)
         {
+
             try
             {
-                _EmployeeRepository.Delete(employee);
+                var mappedEmp = _mapper.Map<EmployeeViewModel, Employee>(employeeVm);
+                _EmployeeRepository.Delete(mappedEmp);
                 return RedirectToAction(nameof(Index));
             }
             catch (System.Exception ex)
@@ -118,7 +164,7 @@ namespace Client.PL.Controllers
                     ModelState.AddModelError(string.Empty, ex.Message);
                 else
                     ModelState.AddModelError(string.Empty, "An Error Has Occured Delete The Employee ");
-                return View(employee);
+                return View(employeeVm);
             }
         }
     }
